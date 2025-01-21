@@ -1,0 +1,8 @@
+name: CollectionTracker
+version: 1.0
+main: com.fate101.collectiontracker.CollectionTracker
+api-version: 1.21
+commands:
+  collection:
+    description: Opens your collection book
+    usage: /<command>
