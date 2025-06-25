@@ -1,8 +1,11 @@
 name: CollectionTracker
-version: 1.1
+version: 1.2
 main: com.fate101.collectiontracker.CollectionTracker
 api-version: 1.21
 commands:
   collection:
     description: Opens your collection book
+    usage: /<command>
+  coltop:
+    description: Opens the collection leaderboard
     usage: /<command>

@@ -10,11 +10,13 @@ A comprehensive Minecraft plugin that allows players to track and collect all ob
 
 - **Automatic Item Tracking**: Automatically detects when players pick up new items
 - **Interactive GUI**: Browse your collection with a user-friendly interface
+- **Collection Leaderboards**: Compete with other players and see who has the most complete collection
 - **Progress Statistics**: View completion percentage and collection statistics
 - **Cross-Version Compatibility**: Automatically supports new items from Minecraft updates
 - **Persistent Storage**: Player collections are saved and persist across server restarts
 - **Smart Filtering**: Excludes creative-only and unobtainable items
 - **Real-time Notifications**: Get notified when you collect new items
+- **Ranking System**: Color-coded rankings with special indicators for top 3 players
 
 ## 📋 Requirements
 
@@ -37,6 +39,7 @@ A comprehensive Minecraft plugin that allows players to track and collect all ob
 | Command | Description | Permission |
 |---------|-------------|------------|
 | `/collection` | Opens your personal collection book | `collectiontracker.use` |
+| `/coltop` | Opens the collection leaderboard | `collectiontracker.use` |
 
 ## 🎮 Usage
 
@@ -44,8 +47,9 @@ A comprehensive Minecraft plugin that allows players to track and collect all ob
 
 1. **Start Collecting**: Simply play the game normally - the plugin automatically tracks items you pick up
 2. **View Your Collection**: Use `/collection` to open your collection book
-3. **Track Progress**: Check the statistics book in the GUI to see your completion percentage
-4. **Navigate**: Use the arrow buttons to browse through different pages of items
+3. **Check Leaderboards**: Use `/coltop` to see how you rank against other players
+4. **Track Progress**: Check the statistics book in the GUI to see your completion percentage
+5. **Navigate**: Use the arrow buttons to browse through different pages of items or leaderboard entries
 
 ### For Server Administrators
 
@@ -150,8 +154,8 @@ If you encounter any issues or have questions:
 
 ## 🔮 Future Plans
 
+- [x] Collection leaderboards
 - [ ] Collection categories (blocks, items, tools, etc.)
-- [ ] Collection leaderboards
 - [ ] Collection rewards system
 - [ ] Export collection data
 - [ ] Collection sharing between players

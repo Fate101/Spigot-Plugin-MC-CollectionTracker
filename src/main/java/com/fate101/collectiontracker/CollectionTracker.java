@@ -11,10 +11,12 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
+import org.bukkit.profile.PlayerProfile;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,8 +27,11 @@ public class CollectionTracker extends JavaPlugin implements Listener {
     private File collectionsFile;
     private FileConfiguration collectionsConfig;
     private static final String GUI_TITLE = "Collection Tracker";
+    private static final String LEADERBOARD_TITLE = "Collection Leaderboard";
     private static final int GUI_SIZE = 54; // 6 rows of inventory
+    private static final int LEADERBOARD_SIZE = 54; // 6 rows of inventory
     private Map<UUID, Integer> playerPages;
+    private Map<UUID, Integer> leaderboardPages;
     private List<Material> collectibleItems;
 
     private boolean isCreativeOnlyItem(Material material) {
@@ -70,6 +75,7 @@ public class CollectionTracker extends JavaPlugin implements Listener {
     public void onEnable() {
         playerCollections = new HashMap<>();
         playerPages = new HashMap<>();
+        leaderboardPages = new HashMap<>();
 
         // Initialize collectible items list with filtering
         collectibleItems = new ArrayList<>();
@@ -126,6 +132,15 @@ public class CollectionTracker extends JavaPlugin implements Listener {
             }
             return false;
         });
+
+        getCommand("coltop").setExecutor((sender, command, label, args) -> {
+            if (sender instanceof Player) {
+                Player player = (Player) sender;
+                openLeaderboardGUI(player, 0);
+                return true;
+            }
+            return false;
+        });
     }
 
     @Override
@@ -160,22 +175,29 @@ public class CollectionTracker extends JavaPlugin implements Listener {
             return;
         }
 
-        if (!event.getView().getTitle().startsWith(GUI_TITLE)) {
+        String title = event.getView().getTitle();
+        if (!title.startsWith(GUI_TITLE) && !title.startsWith(LEADERBOARD_TITLE)) {
             return;
         }
 
         event.setCancelled(true);
 
         Player player = (Player) event.getWhoClicked();
-        int currentPage = playerPages.get(player.getUniqueId());
 
-        // Handle navigation buttons
-        if (event.getCurrentItem() != null) {
-            if (event.getSlot() == 45 && currentPage > 0) { // Previous page
-                openCollectionGUI(player, currentPage - 1);
-            } else if (event.getSlot() == 53 && (currentPage + 1) * 45 < collectibleItems.size()) { // Next page
-                openCollectionGUI(player, currentPage + 1);
+        // Handle collection GUI navigation
+        if (title.startsWith(GUI_TITLE)) {
+            int currentPage = playerPages.get(player.getUniqueId());
+            if (event.getCurrentItem() != null) {
+                if (event.getSlot() == 45 && currentPage > 0) { // Previous page
+                    openCollectionGUI(player, currentPage - 1);
+                } else if (event.getSlot() == 53 && (currentPage + 1) * 45 < collectibleItems.size()) { // Next page
+                    openCollectionGUI(player, currentPage + 1);
+                }
             }
+        }
+        // Leaderboard GUI - no navigation needed (single page)
+        else if (title.startsWith(LEADERBOARD_TITLE)) {
+            // No navigation for leaderboard - just cancel the event
         }
     }
 
@@ -294,6 +316,184 @@ public class CollectionTracker extends JavaPlugin implements Listener {
             }
 
             playerCollections.put(uuid, materials);
+        }
+    }
+
+    // Leaderboard methods
+    private List<LeaderboardEntry> getLeaderboardEntries() {
+        List<LeaderboardEntry> entries = new ArrayList<>();
+        
+        for (Map.Entry<UUID, Set<Material>> entry : playerCollections.entrySet()) {
+            UUID playerUUID = entry.getKey();
+            Set<Material> collection = entry.getValue();
+            
+            // Get player name
+            String playerName = "Unknown Player";
+            Player player = Bukkit.getPlayer(playerUUID);
+            if (player != null) {
+                playerName = player.getName();
+            } else {
+                // Try to get offline player name
+                try {
+                    playerName = Bukkit.getOfflinePlayer(playerUUID).getName();
+                    if (playerName == null) {
+                        playerName = "Unknown Player";
+                    }
+                } catch (Exception e) {
+                    playerName = "Unknown Player";
+                }
+            }
+            
+            double completionPercentage = (collection.size() * 100.0) / collectibleItems.size();
+            entries.add(new LeaderboardEntry(playerUUID, playerName, collection.size(), completionPercentage));
+        }
+        
+        // Sort by completion percentage (highest first), then by items collected (highest first)
+        entries.sort((a, b) -> {
+            int completionCompare = Double.compare(b.completionPercentage, a.completionPercentage);
+            if (completionCompare != 0) {
+                return completionCompare;
+            }
+            return Integer.compare(b.itemsCollected, a.itemsCollected);
+        });
+        
+        return entries;
+    }
+
+    private void openLeaderboardGUI(Player player, int page) {
+        leaderboardPages.put(player.getUniqueId(), page);
+        
+        List<LeaderboardEntry> entries = getLeaderboardEntries();
+        Inventory gui = Bukkit.createInventory(null, LEADERBOARD_SIZE, LEADERBOARD_TITLE);
+        
+        // Find the viewing player's entry
+        LeaderboardEntry viewingPlayerEntry = null;
+        for (LeaderboardEntry entry : entries) {
+            if (entry.playerUUID.equals(player.getUniqueId())) {
+                viewingPlayerEntry = entry;
+                break;
+            }
+        }
+        
+        // Show top 44 entries (leaving space for viewing player if needed)
+        int entriesToShow = Math.min(44, entries.size());
+        
+        // Add leaderboard entries
+        for (int i = 0; i < entriesToShow; i++) {
+            LeaderboardEntry entry = entries.get(i);
+            int rank = i + 1;
+            
+            ItemStack item = new ItemStack(Material.PLAYER_HEAD);
+            SkullMeta meta = (SkullMeta) item.getItemMeta();
+            
+            if (meta != null) {
+                // Set the player head to the correct player skin
+                try {
+                    meta.setOwningPlayer(Bukkit.getOfflinePlayer(entry.playerUUID));
+                } catch (Exception e) {
+                    getLogger().warning("Could not set player head for " + entry.playerName);
+                }
+                // Set rank and player info
+                String rankColor = getRankColor(rank);
+                String displayName = rankColor + "#" + rank + " " + entry.playerName;
+                // Highlight the viewing player
+                if (entry.playerUUID.equals(player.getUniqueId())) {
+                    displayName = "§b§lYOU - " + displayName;
+                }
+                meta.setDisplayName(displayName);
+                List<String> lore = new ArrayList<>();
+                lore.add("§7Items Collected: §e" + entry.itemsCollected + "/" + collectibleItems.size());
+                lore.add("§7Completion: §e" + String.format("%.1f%%", entry.completionPercentage));
+                // Add special indicators for top 3
+                if (rank == 1) {
+                    lore.add("§6🥇 First Place!");
+                } else if (rank == 2) {
+                    lore.add("§7🥈 Second Place!");
+                } else if (rank == 3) {
+                    lore.add("§c🥉 Third Place!");
+                }
+                meta.setLore(lore);
+                item.setItemMeta(meta);
+            }
+            gui.setItem(i, item);
+        }
+        // Add viewing player in bottom right if they're not already shown
+        if (viewingPlayerEntry != null) {
+            boolean playerAlreadyShown = false;
+            for (int i = 0; i < entriesToShow; i++) {
+                if (entries.get(i).playerUUID.equals(player.getUniqueId())) {
+                    playerAlreadyShown = true;
+                    break;
+                }
+            }
+            if (!playerAlreadyShown) {
+                // Find the player's actual rank
+                int actualRank = 0;
+                for (int i = 0; i < entries.size(); i++) {
+                    if (entries.get(i).playerUUID.equals(player.getUniqueId())) {
+                        actualRank = i + 1;
+                        break;
+                    }
+                }
+                ItemStack item = new ItemStack(Material.PLAYER_HEAD);
+                SkullMeta meta = (SkullMeta) item.getItemMeta();
+                if (meta != null) {
+                    try {
+                        meta.setOwningPlayer(Bukkit.getOfflinePlayer(viewingPlayerEntry.playerUUID));
+                    } catch (Exception e) {
+                        getLogger().warning("Could not set player head for " + viewingPlayerEntry.playerName);
+                    }
+                    String rankColor = getRankColor(actualRank);
+                    meta.setDisplayName("§b§lYOU - " + rankColor + "#" + actualRank + " " + viewingPlayerEntry.playerName);
+                    List<String> lore = new ArrayList<>();
+                    lore.add("§7Items Collected: §e" + viewingPlayerEntry.itemsCollected + "/" + collectibleItems.size());
+                    lore.add("§7Completion: §e" + String.format("%.1f%%", viewingPlayerEntry.completionPercentage));
+                    lore.add("§b§lYour Position");
+                    meta.setLore(lore);
+                }
+                gui.setItem(53, item); // Bottom right slot
+            }
+        }
+        
+        // Add leaderboard statistics
+        ItemStack stats = new ItemStack(Material.GOLD_INGOT);
+        ItemMeta statsMeta = stats.getItemMeta();
+        statsMeta.setDisplayName("§6Leaderboard Statistics");
+        List<String> statsLore = new ArrayList<>();
+        statsLore.add("§7Total Participants: §e" + entries.size());
+        if (!entries.isEmpty()) {
+            statsLore.add("§7Top Completion: §e" + String.format("%.1f%%", entries.get(0).completionPercentage));
+            statsLore.add("§7Average Completion: §e" + String.format("%.1f%%", 
+                entries.stream().mapToDouble(e -> e.completionPercentage).average().orElse(0.0)));
+        }
+        statsMeta.setLore(statsLore);
+        stats.setItemMeta(statsMeta);
+        gui.setItem(49, stats);
+        
+        player.openInventory(gui);
+    }
+    
+    private String getRankColor(int rank) {
+        if (rank == 1) return "§6"; // Gold
+        if (rank == 2) return "§7"; // Silver
+        if (rank == 3) return "§c"; // Bronze
+        if (rank <= 10) return "§a"; // Green
+        if (rank <= 25) return "§e"; // Yellow
+        return "§f"; // White
+    }
+    
+    // Helper class for leaderboard entries
+    private static class LeaderboardEntry {
+        final UUID playerUUID;
+        final String playerName;
+        final int itemsCollected;
+        final double completionPercentage;
+        
+        LeaderboardEntry(UUID playerUUID, String playerName, int itemsCollected, double completionPercentage) {
+            this.playerUUID = playerUUID;
+            this.playerName = playerName;
+            this.itemsCollected = itemsCollected;
+            this.completionPercentage = completionPercentage;
         }
     }
 }
