@@ -8,7 +8,7 @@ A comprehensive Minecraft plugin that allows players to track and collect all ob
 
 ## 🌟 Features
 
-- **Automatic Item Tracking**: Automatically detects when players pick up new items
+- **Automatic Item Tracking**: Detects when players pick up, craft, smelt, trade, brew, or interact with buckets to obtain new items (Survival mode only)
 - **Interactive GUI**: Browse your collection with a user-friendly interface
 - **Collection Leaderboards**: Compete with other players and see who has the most complete collection
 - **Progress Statistics**: View completion percentage and collection statistics
@@ -26,7 +26,7 @@ A comprehensive Minecraft plugin that allows players to track and collect all ob
 
 ## 🚀 Installation
 
-1. **Download** the latest `collectiontracker-1.1-SNAPSHOT.jar` from the releases
+1. **Download** the latest `collectiontracker-1.3.jar` from the releases
 2. **Place** the JAR file in your server's `plugins` folder
 3. **Restart** your server
 4. **Verify** installation by checking the console for:
@@ -45,7 +45,7 @@ A comprehensive Minecraft plugin that allows players to track and collect all ob
 
 ### For Players
 
-1. **Start Collecting**: Simply play the game normally - the plugin automatically tracks items you pick up
+1. **Start Collecting**: Play the game normally—items you pick up, craft, smelt, trade, or brew are automatically tracked
 2. **View Your Collection**: Use `/collection` to open your collection book
 3. **Check Leaderboards**: Use `/coltop` to see how you rank against other players
 4. **Track Progress**: Check the statistics book in the GUI to see your completion percentage
@@ -57,12 +57,18 @@ The plugin requires no configuration and works out of the box. All player data i
 
 ## 🔧 Technical Details
 
-### Automatic Item Detection
+### Comprehensive Item Detection (v1.3+)
 
-The plugin dynamically loads all available materials from the Bukkit API, ensuring compatibility with:
-- Current Minecraft version (1.21.6)
-- Future Minecraft updates
-- All obtainable items and blocks
+The plugin now tracks new items acquired by Survival mode players via:
+- **Picking up** items from the ground
+- **Crafting** items in a crafting table
+- **Smelting** items in a furnace or blast/smoker
+- **Trading** with villagers (merchant inventories)
+- **Brewing** potions in a brewing stand
+- **Bucket interactions** (filling with water, lava, milk, powder snow, etc.)
+- **Any inventory click** that adds a new item to the player's inventory (except in plugin GUIs)
+
+> **Note:** Only items obtained in Survival mode are counted, to prevent cheating or accidental triggers in Creative/Adventure/Spectator modes.
 
 ### Smart Filtering System
 
@@ -93,7 +99,7 @@ cd Spigot-Plugin-MC-CollectionTracker
 # Build the plugin
 mvn clean package
 
-# Find the JAR file in target/collectiontracker-1.1-SNAPSHOT.jar
+# Find the JAR file in target/collectiontracker-1.3.jar
 ```
 
 ## 📊 Collection Statistics
@@ -108,9 +114,9 @@ The plugin tracks:
 
 | Minecraft Version | Plugin Version | Status |
 |------------------|----------------|--------|
-| 1.21.6+ | 1.1-SNAPSHOT | ✅ Supported |
-| 1.21.4 | 1.0-SNAPSHOT | ✅ Supported |
-| 1.21.x | 1.0-SNAPSHOT | ✅ Supported |
+| 1.21.6+ | 1.3 | ✅ Supported |
+| 1.21.4 | 1.0–1.2 | ✅ Supported |
+| 1.21.x | 1.0–1.2 | ✅ Supported |
 
 ## 🎯 New Items in 1.21.6
 
@@ -155,6 +161,7 @@ If you encounter any issues or have questions:
 ## 🔮 Future Plans
 
 - [x] Collection leaderboards
+- [x] Comprehensive item acquisition tracking (crafting, smelting, trading, brewing, etc.)
 - [ ] Collection categories (blocks, items, tools, etc.)
 - [ ] Collection rewards system
 - [ ] Export collection data
@@ -164,4 +171,4 @@ If you encounter any issues or have questions:
 
 **Made with ❤️ for the Minecraft community**
 
-*Last updated for Minecraft 1.21.6* 
+*Last updated for Minecraft 1.3 / Minecraft 1.21.6* 

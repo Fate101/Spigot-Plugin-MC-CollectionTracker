@@ -16,7 +16,15 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
-import org.bukkit.profile.PlayerProfile;
+import org.bukkit.event.inventory.CraftItemEvent;
+import org.bukkit.event.inventory.FurnaceExtractEvent;
+import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.inventory.BrewEvent;
+import org.bukkit.inventory.BrewerInventory;
+import org.bukkit.inventory.MerchantInventory;
+import org.bukkit.event.player.PlayerBucketFillEvent;
+import org.bukkit.event.player.PlayerBucketEntityEvent;
+import org.bukkit.GameMode;
 
 import java.io.File;
 import java.io.IOException;
@@ -153,8 +161,8 @@ public class CollectionTracker extends JavaPlugin implements Listener {
         if (!(event.getEntity() instanceof Player)) {
             return;
         }
-
         Player player = (Player) event.getEntity();
+        if (player.getGameMode() != GameMode.SURVIVAL) return;
         Material material = event.getItem().getItemStack().getType();
 
         Set<Material> collection = playerCollections.computeIfAbsent(
@@ -198,6 +206,125 @@ public class CollectionTracker extends JavaPlugin implements Listener {
         // Leaderboard GUI - no navigation needed (single page)
         else if (title.startsWith(LEADERBOARD_TITLE)) {
             // No navigation for leaderboard - just cancel the event
+        }
+    }
+
+    @EventHandler
+    public void onAnyInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player)) {
+            return;
+        }
+        Player player = (Player) event.getWhoClicked();
+        if (player.getGameMode() != GameMode.SURVIVAL) return;
+        String title = event.getView().getTitle();
+        // Ignore plugin GUIs
+        if (title.startsWith(GUI_TITLE) || title.startsWith(LEADERBOARD_TITLE)) {
+            return;
+        }
+        // Only care about items being added to the player's inventory
+        if (event.getClickedInventory() == null || !event.getClickedInventory().equals(player.getInventory())) {
+            return;
+        }
+        ItemStack clicked = event.getCurrentItem();
+        if (clicked == null || clicked.getType().isAir() || isCreativeOnlyItem(clicked.getType())) {
+            return;
+        }
+        Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
+        if (!collection.contains(clicked.getType()) && collectibleItems.contains(clicked.getType())) {
+            collection.add(clicked.getType());
+            player.sendMessage("§a✔ New item collected: " + clicked.getType().name());
+            saveCollections();
+        }
+    }
+
+    @EventHandler
+    public void onCraftItem(CraftItemEvent event) {
+        if (!(event.getWhoClicked() instanceof Player)) return;
+        Player player = (Player) event.getWhoClicked();
+        if (player.getGameMode() != GameMode.SURVIVAL) return;
+        ItemStack result = event.getRecipe() != null ? event.getRecipe().getResult() : null;
+        if (result == null || result.getType().isAir() || isCreativeOnlyItem(result.getType())) return;
+        Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
+        if (!collection.contains(result.getType()) && collectibleItems.contains(result.getType())) {
+            collection.add(result.getType());
+            player.sendMessage("§a✔ New item collected: " + result.getType().name());
+            saveCollections();
+        }
+    }
+
+    @EventHandler
+    public void onFurnaceExtract(FurnaceExtractEvent event) {
+        Player player = event.getPlayer();
+        if (player.getGameMode() != GameMode.SURVIVAL) return;
+        Material type = event.getItemType();
+        if (type.isAir() || isCreativeOnlyItem(type)) return;
+        Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
+        if (!collection.contains(type) && collectibleItems.contains(type)) {
+            collection.add(type);
+            player.sendMessage("§a✔ New item collected: " + type.name());
+            saveCollections();
+        }
+    }
+
+    @EventHandler
+    public void onSpecialInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player)) return;
+        Player player = (Player) event.getWhoClicked();
+        if (player.getGameMode() != GameMode.SURVIVAL) return;
+        String title = event.getView().getTitle();
+        if (title.startsWith(GUI_TITLE) || title.startsWith(LEADERBOARD_TITLE)) return;
+        // Merchant (trading)
+        if (event.getInventory() instanceof MerchantInventory && event.getSlotType() == InventoryType.SlotType.RESULT) {
+            ItemStack item = event.getCurrentItem();
+            if (item != null && !item.getType().isAir() && !isCreativeOnlyItem(item.getType())) {
+                Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
+                if (!collection.contains(item.getType()) && collectibleItems.contains(item.getType())) {
+                    collection.add(item.getType());
+                    player.sendMessage("§a✔ New item collected: " + item.getType().name());
+                    saveCollections();
+                }
+            }
+        }
+        // Brewing stand
+        if (event.getInventory() instanceof BrewerInventory && event.getSlotType() == InventoryType.SlotType.RESULT) {
+            ItemStack item = event.getCurrentItem();
+            if (item != null && !item.getType().isAir() && !isCreativeOnlyItem(item.getType())) {
+                Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
+                if (!collection.contains(item.getType()) && collectibleItems.contains(item.getType())) {
+                    collection.add(item.getType());
+                    player.sendMessage("§a✔ New item collected: " + item.getType().name());
+                    saveCollections();
+                }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onBucketFill(PlayerBucketFillEvent event) {
+        Player player = event.getPlayer();
+        if (player.getGameMode() != GameMode.SURVIVAL) return;
+        ItemStack filled = event.getItemStack();
+        if (filled == null || filled.getType().isAir() || isCreativeOnlyItem(filled.getType())) return;
+        Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
+        if (!collection.contains(filled.getType()) && collectibleItems.contains(filled.getType())) {
+            collection.add(filled.getType());
+            player.sendMessage("§a✔ New item collected: " + filled.getType().name());
+            saveCollections();
+        }
+    }
+
+    @EventHandler
+    public void onBucketEntity(PlayerBucketEntityEvent event) {
+        Player player = event.getPlayer();
+        if (player.getGameMode() != GameMode.SURVIVAL) return;
+        // Only handle milking (cow, goat, camel, etc.)
+        Material type = Material.MILK_BUCKET;
+        if (isCreativeOnlyItem(type)) return;
+        Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
+        if (!collection.contains(type) && collectibleItems.contains(type)) {
+            collection.add(type);
+            player.sendMessage("§a✔ New item collected: " + type.name());
+            saveCollections();
         }
     }
 
