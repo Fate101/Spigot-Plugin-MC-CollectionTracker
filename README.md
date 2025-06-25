@@ -131,7 +131,13 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the GNU General Public License v3 (GPL-3.0) - see the LICENSE file for details.
+
+**What this means:**
+- ✅ You are free to use, modify, and distribute this code
+- ✅ You must keep any modifications open source under the same license
+- ✅ You cannot lock this code behind a paywall or make it proprietary
+- ✅ If you distribute this code or modifications, you must provide the source code
 
 ## 🆘 Support
 
