@@ -42,7 +42,28 @@ public class CollectionTracker extends JavaPlugin implements Listener {
                 name.contains("jigsaw") ||              // Jigsaw blocks
                 material == Material.KNOWLEDGE_BOOK ||   // Knowledge book
                 name.contains("command_block") ||       // Command blocks (explicit check)
-                name.contains("reinforced_deepslate");  // Reinforced deepslate
+                name.contains("reinforced_deepslate") || // Reinforced deepslate
+                name.contains("trial_spawner") ||       // Trial spawner (1.21+)
+                name.contains("vault") ||               // Vault blocks (1.21+)
+                // Creative-only armor trims
+                name.contains("flow_armor_trim") ||     // Flow armor trim
+                name.contains("spire_armor_trim") ||    // Spire armor trim
+                name.contains("wayfinder_armor_trim") || // Wayfinder armor trim
+                name.contains("raiser_armor_trim") ||   // Raiser armor trim
+                name.contains("shaper_armor_trim") ||   // Shaper armor trim
+                name.contains("host_armor_trim") ||     // Host armor trim
+                name.contains("warden_armor_trim") ||   // Warden armor trim
+                name.contains("silence_armor_trim") ||  // Silence armor trim
+                name.contains("tide_armor_trim") ||     // Tide armor trim
+                name.contains("snout_armor_trim") ||    // Snout armor trim
+                name.contains("rib_armor_trim") ||      // Rib armor trim
+                name.contains("eye_armor_trim") ||      // Eye armor trim
+                name.contains("dune_armor_trim") ||     // Dune armor trim
+                name.contains("coast_armor_trim") ||    // Coast armor trim
+                name.contains("wild_armor_trim") ||     // Wild armor trim
+                name.contains("ward_armor_trim") ||     // Ward armor trim
+                name.contains("sentry_armor_trim") ||   // Sentry armor trim
+                name.contains("vex_armor_trim");        // Vex armor trim
     }
 
     @Override
@@ -74,6 +95,9 @@ public class CollectionTracker extends JavaPlugin implements Listener {
         // Sort the items alphabetically
         Collections.sort(collectibleItems, (a, b) ->
                 formatMaterialName(a.name()).compareTo(formatMaterialName(b.name())));
+
+        // Log the total number of collectible items
+        getLogger().info("CollectionTracker initialized with " + collectibleItems.size() + " collectible items");
 
         // Create config file
         if (!getDataFolder().exists()) {
