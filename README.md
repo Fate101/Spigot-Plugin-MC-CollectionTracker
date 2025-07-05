@@ -13,23 +13,27 @@ A comprehensive Minecraft plugin that allows players to track and collect all ob
 - **Collection Leaderboards**: Compete with other players and see who has the most complete collection
 - **Progress Statistics**: View completion percentage and collection statistics
 - **Cross-Version Compatibility**: Automatically supports new items from Minecraft updates
-- **Persistent Storage**: Player collections are saved and persist across server restarts
+- **Flexible Storage**: Support for both SQLite and MySQL databases with automatic migration
 - **Smart Filtering**: Excludes creative-only and unobtainable items
-- **Real-time Notifications**: Get notified when you collect new items
+- **Real-time Notifications**: Get notified when you collect new items (toggleable)
 - **Ranking System**: Color-coded rankings with special indicators for top 3 players
+- **Database Migration**: Seamless migration between SQLite and MySQL with a single command
+- **Robust Error Handling**: Comprehensive data validation and corruption protection
 
 ## 📋 Requirements
 
 - **Minecraft Server**: 1.21.6 or higher
 - **Java**: Version 17 or higher
 - **Server Software**: Spigot, Paper, or any Spigot-based server
+- **Database**: SQLite (included) or MySQL 5.7+ (optional)
 
 ## 🚀 Installation
 
-1. **Download** the latest `collectiontracker-1.3.jar` from the releases
+1. **Download** the latest `collectiontracker-2.0.jar` from the releases
 2. **Place** the JAR file in your server's `plugins` folder
 3. **Restart** your server
-4. **Verify** installation by checking the console for:
+4. **Configure** database settings in `plugins/CollectionTracker/config.yml` (optional)
+5. **Verify** installation by checking the console for:
    ```
    [INFO] CollectionTracker initialized with [X] collectible items
    ```
@@ -40,6 +44,8 @@ A comprehensive Minecraft plugin that allows players to track and collect all ob
 |---------|-------------|------------|
 | `/collection` | Opens your personal collection book | `collectiontracker.use` |
 | `/coltop` | Opens the collection leaderboard | `collectiontracker.use` |
+| `/collectionnotify` | Toggle collection notifications on/off | `collectiontracker.use` |
+| `/collectiondbmigrate` | Migrate data between SQLite and MySQL | `collectiontracker.admin` |
 
 ## 🎮 Usage
 
@@ -48,18 +54,70 @@ A comprehensive Minecraft plugin that allows players to track and collect all ob
 1. **Start Collecting**: Play the game normally—items you pick up, craft, smelt, trade, or brew are automatically tracked
 2. **View Your Collection**: Use `/collection` to open your collection book
 3. **Check Leaderboards**: Use `/coltop` to see how you rank against other players
-4. **Track Progress**: Check the statistics book in the GUI to see your completion percentage
-5. **Navigate**: Use the arrow buttons to browse through different pages of items or leaderboard entries
+4. **Toggle Notifications**: Use `/collectionnotify` to turn collection messages on/off
+5. **Track Progress**: Check the statistics book in the GUI to see your completion percentage
+6. **Navigate**: Use the arrow buttons to browse through different pages of items or leaderboard entries
 
 ### For Server Administrators
 
-The plugin requires no configuration and works out of the box. All player data is automatically saved to `plugins/CollectionTracker/collections.yml`.
+#### Basic Configuration
+The plugin works out of the box with SQLite storage. For MySQL support, edit `plugins/CollectionTracker/config.yml`:
+
+```yaml
+database:
+  type: "sqlite"  # or "mysql"
+  
+  # SQLite settings (default)
+  sqlite:
+    filename: "collections.db"
+  
+  # MySQL settings (optional)
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "collectiontracker"
+    username: "root"
+    password: "password"
+```
+
+#### Database Migration
+To migrate between database types:
+
+1. **Change the config** to your desired database type
+2. **Restart the server** (plugin will connect to new database)
+3. **Run the migration command**:
+   ```
+   /collectiondbmigrate
+   ```
+4. **The plugin automatically**:
+   - Detects which database has data
+   - Migrates all collections and notification settings
+   - Creates backups of the original database
+   - Reconnects to the new database
 
 ## 🔧 Technical Details
 
-### Comprehensive Item Detection (v1.3+)
+### Database Support
 
-The plugin now tracks new items acquired by Survival mode players via:
+#### SQLite (Default)
+- **File**: `plugins/CollectionTracker/collections.db`
+- **Pros**: No setup required, portable, included with plugin
+- **Best for**: Small to medium servers, development, testing
+
+#### MySQL
+- **Pros**: Better performance for large servers, concurrent access, backup tools
+- **Best for**: Large servers, production environments, multiple servers sharing data
+
+#### Migration Features
+- **Bidirectional**: Migrate from SQLite to MySQL or vice versa
+- **Automatic Detection**: Detects which database contains data
+- **Safe Merging**: Uses `INSERT IGNORE` to prevent data loss
+- **Backup Creation**: Automatically backs up original database
+- **Data Validation**: Comprehensive error checking and corruption protection
+
+### Comprehensive Item Detection
+
+The plugin tracks new items acquired by Survival mode players via:
 - **Picking up** items from the ground
 - **Crafting** items in a crafting table
 - **Smelting** items in a furnace or blast/smoker
@@ -78,11 +136,14 @@ The plugin automatically excludes:
 - Unobtainable items (bedrock, end portal frames, etc.)
 - Armor trim templates (creative-only variants)
 
-### Data Storage
+### Data Validation & Error Handling
 
-- **File**: `plugins/CollectionTracker/collections.yml`
-- **Format**: YAML configuration
-- **Backup**: Automatically saves on plugin disable and item collection
+The plugin includes comprehensive data validation:
+- **Material Validation**: Ensures materials are valid and collectible
+- **UUID Validation**: Validates player UUIDs are properly formatted
+- **Schema Validation**: Checks database table structure integrity
+- **Migration Safety**: Handles corrupted or invalid data gracefully
+- **Logging**: Detailed warnings for any data issues found
 
 ## 🛠️ Building from Source
 
@@ -93,13 +154,13 @@ The plugin automatically excludes:
 ### Build Steps
 ```bash
 # Clone the repository
-git clone [repository-url]
+git clone https://github.com/Fate101/Spigot-Plugin-MC-CollectionTracker
 cd Spigot-Plugin-MC-CollectionTracker
 
 # Build the plugin
 mvn clean package
 
-# Find the JAR file in target/collectiontracker-1.3.jar
+# Find the JAR file in target/collectiontracker-2.0.jar
 ```
 
 ## 📊 Collection Statistics
@@ -114,9 +175,9 @@ The plugin tracks:
 
 | Minecraft Version | Plugin Version | Status |
 |------------------|----------------|--------|
-| 1.21.6+ | 1.3 | ✅ Supported |
-| 1.21.4 | 1.0–1.2 | ✅ Supported |
-| 1.21.x | 1.0–1.2 | ✅ Supported |
+| 1.21.6+ | 2.0 | ✅ Supported |
+| 1.21.4 | 1.0–1.4 | ✅ Supported |
+| 1.21.x | 1.0–1.4 | ✅ Supported |
 
 ## 🎯 New Items in 1.21.6
 
@@ -155,13 +216,18 @@ If you encounter any issues or have questions:
 
 1. **Check the console** for error messages
 2. **Verify compatibility** with your server version
-3. **Report issues** on the GitHub repository
-4. **Check existing issues** for similar problems
+3. **Check database configuration** if using MySQL
+4. **Report issues** on the GitHub repository
+5. **Check existing issues** for similar problems
 
 ## 🔮 Future Plans
 
 - [x] Collection leaderboards
 - [x] Comprehensive item acquisition tracking (crafting, smelting, trading, brewing, etc.)
+- [x] Database support (SQLite/MySQL)
+- [x] Notification toggle system
+- [x] Database migration tools
+- [x] Enhanced error handling and data validation
 - [ ] Collection categories (blocks, items, tools, etc.)
 - [ ] Collection rewards system
 - [ ] Export collection data
@@ -171,4 +237,4 @@ If you encounter any issues or have questions:
 
 **Made with ❤️ for the Minecraft community**
 
-*Last updated for Minecraft 1.3 / Minecraft 1.21.6* 
+*Last updated for Minecraft 1.21.6* 

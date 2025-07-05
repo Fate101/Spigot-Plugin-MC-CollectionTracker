@@ -1,7 +1,7 @@
 name: CollectionTracker
-version: 1.3
+version: 2.0
 main: com.fate101.collectiontracker.CollectionTracker
-api-version: 1.21
+api-version: 1.21.7
 commands:
   collection:
     description: Opens your collection book
@@ -9,3 +9,13 @@ commands:
   coltop:
     description: Opens the collection leaderboard
     usage: /<command>
+  collectionnotify:
+    description: Toggles collection notifications on/off
+    usage: /<command>
+  collectiondbmigrate:
+    description: Migrates data between database types based on config (Admin only)
+    usage: /<command>
+permissions:
+  collectiontracker.admin:
+    description: Allows access to admin commands like migration
+    default: op

@@ -14,7 +14,6 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.inventory.FurnaceExtractEvent;
@@ -26,14 +25,14 @@ import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerBucketEntityEvent;
 import org.bukkit.GameMode;
 
+import java.util.*;
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
 
 public class CollectionTracker extends JavaPlugin implements Listener {
     private Map<UUID, Set<Material>> playerCollections;
-    private File collectionsFile;
-    private FileConfiguration collectionsConfig;
+    private Set<UUID> notificationsDisabled;
+    private DatabaseManager databaseManager;
     private static final String GUI_TITLE = "Collection Tracker";
     private static final String LEADERBOARD_TITLE = "Collection Leaderboard";
     private static final int GUI_SIZE = 54; // 6 rows of inventory
@@ -81,53 +80,73 @@ public class CollectionTracker extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        playerCollections = new HashMap<>();
-        playerPages = new HashMap<>();
-        leaderboardPages = new HashMap<>();
+        try {
+            // Save default config if it doesn't exist
+            saveDefaultConfig();
+            
+            // Initialize database manager
+            databaseManager = new DatabaseManager(this);
+            if (!databaseManager.initialize()) {
+                getLogger().severe("=== CollectionTracker Database Initialization Failed ===");
+                getLogger().severe("The plugin could not connect to the database.");
+                getLogger().severe("Please check your config.yml file and ensure:");
+                getLogger().severe("1. Database type is set correctly (sqlite or mysql)");
+                getLogger().severe("2. MySQL credentials are correct (if using MySQL)");
+                getLogger().severe("3. MySQL server is running and accessible (if using MySQL)");
+                getLogger().severe("4. Database file location is writable (if using SQLite)");
+                getLogger().severe("=== Plugin will be disabled ===");
+                getServer().getPluginManager().disablePlugin(this);
+                return;
+            }
+            
+                        playerCollections = new HashMap<>();
+            notificationsDisabled = new HashSet<>();
+            playerPages = new HashMap<>();
+            leaderboardPages = new HashMap<>();
 
-        // Initialize collectible items list with filtering
-        collectibleItems = new ArrayList<>();
-        for (Material material : Material.values()) {
-            if (material.isItem() && !material.isAir() && !isCreativeOnlyItem(material)) {
-                // Additional checks for obtainable items
-                if (material.isBlock()) {
-                    // Only add blocks that should be collectible
-                    if (!material.name().contains("INFESTED") &&    // Remove infested blocks
-                            !material.name().contains("PORTAL") &&      // Remove portal blocks
-                            !material.name().equals("BEDROCK") &&       // Remove bedrock
-                            !material.name().contains("END_PORTAL") &&  // Remove end portal frames
-                            !material.name().contains("CHORUS_FLOWER")) { // Remove chorus flower (technical block)
+            // Initialize collectible items list with filtering
+            collectibleItems = new ArrayList<>();
+            for (Material material : Material.values()) {
+                if (material.isItem() && !material.isAir() && !isCreativeOnlyItem(material)) {
+                    // Additional checks for obtainable items
+                    if (material.isBlock()) {
+                        // Only add blocks that should be collectible
+                        if (!material.name().contains("INFESTED") &&    // Remove infested blocks
+                                !material.name().contains("PORTAL") &&      // Remove portal blocks
+                                !material.name().equals("BEDROCK") &&       // Remove bedrock
+                                !material.name().contains("END_PORTAL") &&  // Remove end portal frames
+                                !material.name().contains("CHORUS_FLOWER")) { // Remove chorus flower (technical block)
+                            collectibleItems.add(material);
+                        }
+                    } else {
+                        // Add non-block items by default unless they're in creative-only list
                         collectibleItems.add(material);
                     }
-                } else {
-                    // Add non-block items by default unless they're in creative-only list
-                    collectibleItems.add(material);
                 }
             }
-        }
 
-        // Sort the items alphabetically
-        Collections.sort(collectibleItems, (a, b) ->
-                formatMaterialName(a.name()).compareTo(formatMaterialName(b.name())));
+            // Sort the items alphabetically
+            Collections.sort(collectibleItems, (a, b) ->
+                    formatMaterialName(a.name()).compareTo(formatMaterialName(b.name())));
 
-        // Log the total number of collectible items
-        getLogger().info("CollectionTracker initialized with " + collectibleItems.size() + " collectible items");
+            // Log the total number of collectible items
+            getLogger().info("CollectionTracker initialized with " + collectibleItems.size() + " collectible items");
 
-        // Create config file
-        if (!getDataFolder().exists()) {
-            getDataFolder().mkdirs();
-        }
-        collectionsFile = new File(getDataFolder(), "collections.yml");
-        if (!collectionsFile.exists()) {
-            try {
-                collectionsFile.createNewFile();
-            } catch (IOException e) {
-                getLogger().severe("Could not create collections file!");
+            // Migrate existing YAML data if present
+            if (!databaseManager.migrateFromYaml()) {
+                getLogger().warning("Failed to migrate YAML data, but continuing with database initialization");
             }
+            
+            loadCollections();
+            
+        } catch (Exception e) {
+            getLogger().severe("=== CollectionTracker Initialization Failed ===");
+            getLogger().severe("An unexpected error occurred during plugin initialization:");
+            getLogger().severe(e.getMessage());
+            getLogger().severe("=== Plugin will be disabled ===");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
         }
-        collectionsConfig = YamlConfiguration.loadConfiguration(collectionsFile);
-
-        loadCollections();
 
         getServer().getPluginManager().registerEvents(this, this);
 
@@ -149,11 +168,78 @@ public class CollectionTracker extends JavaPlugin implements Listener {
             }
             return false;
         });
+
+        getCommand("collectionnotify").setExecutor((sender, command, label, args) -> {
+            if (sender instanceof Player) {
+                Player player = (Player) sender;
+                UUID playerUUID = player.getUniqueId();
+                
+                if (notificationsDisabled.contains(playerUUID)) {
+                    notificationsDisabled.remove(playerUUID);
+                    databaseManager.saveNotificationSettings(playerUUID, false);
+                    player.sendMessage("§a✔ Collection notifications enabled!");
+                } else {
+                    notificationsDisabled.add(playerUUID);
+                    databaseManager.saveNotificationSettings(playerUUID, true);
+                    player.sendMessage("§c✗ Collection notifications disabled!");
+                }
+                return true;
+            }
+            return false;
+        });
+
+        getCommand("collectiondbmigrate").setExecutor((sender, command, label, args) -> {
+            if (!sender.hasPermission("collectiontracker.admin")) {
+                sender.sendMessage("§cYou don't have permission to use this command!");
+                return true;
+            }
+            
+            String actualCurrentType = databaseManager.detectCurrentDatabaseType();
+            String targetType = getConfig().getString("database.type", "sqlite").toLowerCase();
+            
+            if ("none".equals(actualCurrentType)) {
+                sender.sendMessage("§cNo existing database found to migrate from.");
+                sender.sendMessage("§7The plugin will create a new " + targetType + " database on restart.");
+                return true;
+            }
+            
+            if (actualCurrentType.equals(targetType)) {
+                sender.sendMessage("§eAlready using " + targetType + " database. No migration needed.");
+                return true;
+            }
+            
+            sender.sendMessage("§eStarting migration from " + actualCurrentType + " to " + targetType + "...");
+            sender.sendMessage("§7This may take a moment depending on the amount of data.");
+            
+            boolean success = databaseManager.migrateDatabase();
+            
+            if (success) {
+                sender.sendMessage("§a✔ Migration completed successfully!");
+                sender.sendMessage("§7Your original database has been backed up.");
+                sender.sendMessage("§7Reconnecting to the new database...");
+                
+                // Reinitialize the database connection to use the new type
+                if (databaseManager.reinitialize()) {
+                    sender.sendMessage("§a✔ Successfully connected to the new database!");
+                    sender.sendMessage("§7The plugin is now using the new database type.");
+                } else {
+                    sender.sendMessage("§c⚠ Migration completed but failed to reconnect to new database.");
+                    sender.sendMessage("§7Please restart the server to use the new database type.");
+                }
+            } else {
+                sender.sendMessage("§c✗ Migration failed! Check the console for details.");
+            }
+            
+            return true;
+        });
     }
 
     @Override
     public void onDisable() {
         saveCollections();
+        if (databaseManager != null) {
+            databaseManager.close();
+        }
     }
 
     @EventHandler
@@ -172,8 +258,10 @@ public class CollectionTracker extends JavaPlugin implements Listener {
 
         if (!collection.contains(material)) {
             collection.add(material);
-            player.sendMessage("§a✔ New item collected: " + material.name());
-            saveCollections();
+            if (!notificationsDisabled.contains(player.getUniqueId())) {
+                player.sendMessage("§a✔ New item collected: " + material.name());
+            }
+            databaseManager.savePlayerCollection(player.getUniqueId(), collection);
         }
     }
 
@@ -198,6 +286,19 @@ public class CollectionTracker extends JavaPlugin implements Listener {
             if (event.getCurrentItem() != null) {
                 if (event.getSlot() == 45 && currentPage > 0) { // Previous page
                     openCollectionGUI(player, currentPage - 1);
+                } else if (event.getSlot() == 47) { // Notification toggle
+                    UUID playerUUID = player.getUniqueId();
+                    if (notificationsDisabled.contains(playerUUID)) {
+                        notificationsDisabled.remove(playerUUID);
+                        databaseManager.saveNotificationSettings(playerUUID, false);
+                        player.sendMessage("§a✔ Collection notifications enabled!");
+                    } else {
+                        notificationsDisabled.add(playerUUID);
+                        databaseManager.saveNotificationSettings(playerUUID, true);
+                        player.sendMessage("§c✗ Collection notifications disabled!");
+                    }
+                    // Refresh the GUI to show updated toggle state
+                    openCollectionGUI(player, currentPage);
                 } else if (event.getSlot() == 53 && (currentPage + 1) * 45 < collectibleItems.size()) { // Next page
                     openCollectionGUI(player, currentPage + 1);
                 }
@@ -232,8 +333,10 @@ public class CollectionTracker extends JavaPlugin implements Listener {
         Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
         if (!collection.contains(clicked.getType()) && collectibleItems.contains(clicked.getType())) {
             collection.add(clicked.getType());
-            player.sendMessage("§a✔ New item collected: " + clicked.getType().name());
-            saveCollections();
+            if (!notificationsDisabled.contains(player.getUniqueId())) {
+                player.sendMessage("§a✔ New item collected: " + clicked.getType().name());
+            }
+            databaseManager.savePlayerCollection(player.getUniqueId(), collection);
         }
     }
 
@@ -247,8 +350,10 @@ public class CollectionTracker extends JavaPlugin implements Listener {
         Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
         if (!collection.contains(result.getType()) && collectibleItems.contains(result.getType())) {
             collection.add(result.getType());
-            player.sendMessage("§a✔ New item collected: " + result.getType().name());
-            saveCollections();
+            if (!notificationsDisabled.contains(player.getUniqueId())) {
+                player.sendMessage("§a✔ New item collected: " + result.getType().name());
+            }
+            databaseManager.savePlayerCollection(player.getUniqueId(), collection);
         }
     }
 
@@ -261,8 +366,10 @@ public class CollectionTracker extends JavaPlugin implements Listener {
         Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
         if (!collection.contains(type) && collectibleItems.contains(type)) {
             collection.add(type);
-            player.sendMessage("§a✔ New item collected: " + type.name());
-            saveCollections();
+            if (!notificationsDisabled.contains(player.getUniqueId())) {
+                player.sendMessage("§a✔ New item collected: " + type.name());
+            }
+            databaseManager.savePlayerCollection(player.getUniqueId(), collection);
         }
     }
 
@@ -280,8 +387,10 @@ public class CollectionTracker extends JavaPlugin implements Listener {
                 Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
                 if (!collection.contains(item.getType()) && collectibleItems.contains(item.getType())) {
                     collection.add(item.getType());
-                    player.sendMessage("§a✔ New item collected: " + item.getType().name());
-                    saveCollections();
+                    if (!notificationsDisabled.contains(player.getUniqueId())) {
+                        player.sendMessage("§a✔ New item collected: " + item.getType().name());
+                    }
+                    databaseManager.savePlayerCollection(player.getUniqueId(), collection);
                 }
             }
         }
@@ -292,8 +401,10 @@ public class CollectionTracker extends JavaPlugin implements Listener {
                 Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
                 if (!collection.contains(item.getType()) && collectibleItems.contains(item.getType())) {
                     collection.add(item.getType());
-                    player.sendMessage("§a✔ New item collected: " + item.getType().name());
-                    saveCollections();
+                    if (!notificationsDisabled.contains(player.getUniqueId())) {
+                        player.sendMessage("§a✔ New item collected: " + item.getType().name());
+                    }
+                    databaseManager.savePlayerCollection(player.getUniqueId(), collection);
                 }
             }
         }
@@ -308,8 +419,10 @@ public class CollectionTracker extends JavaPlugin implements Listener {
         Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
         if (!collection.contains(filled.getType()) && collectibleItems.contains(filled.getType())) {
             collection.add(filled.getType());
-            player.sendMessage("§a✔ New item collected: " + filled.getType().name());
-            saveCollections();
+            if (!notificationsDisabled.contains(player.getUniqueId())) {
+                player.sendMessage("§a✔ New item collected: " + filled.getType().name());
+            }
+            databaseManager.savePlayerCollection(player.getUniqueId(), collection);
         }
     }
 
@@ -323,8 +436,10 @@ public class CollectionTracker extends JavaPlugin implements Listener {
         Set<Material> collection = playerCollections.computeIfAbsent(player.getUniqueId(), k -> new HashSet<>());
         if (!collection.contains(type) && collectibleItems.contains(type)) {
             collection.add(type);
-            player.sendMessage("§a✔ New item collected: " + type.name());
-            saveCollections();
+            if (!notificationsDisabled.contains(player.getUniqueId())) {
+                player.sendMessage("§a✔ New item collected: " + type.name());
+            }
+            databaseManager.savePlayerCollection(player.getUniqueId(), collection);
         }
     }
 
@@ -394,6 +509,23 @@ public class CollectionTracker extends JavaPlugin implements Listener {
         stats.setItemMeta(statsMeta);
         gui.setItem(49, stats);
 
+        // Add notification toggle button
+        ItemStack notifyToggle = new ItemStack(notificationsDisabled.contains(player.getUniqueId()) ? Material.BARRIER : Material.BELL);
+        ItemMeta notifyMeta = notifyToggle.getItemMeta();
+        notifyMeta.setDisplayName(notificationsDisabled.contains(player.getUniqueId()) ? "§cNotifications Disabled" : "§aNotifications Enabled");
+        List<String> notifyLore = new ArrayList<>();
+        notifyLore.add("§7Click to toggle collection notifications");
+        if (notificationsDisabled.contains(player.getUniqueId())) {
+            notifyLore.add("§cCurrently disabled");
+            notifyLore.add("§7You won't see collection messages");
+        } else {
+            notifyLore.add("§aCurrently enabled");
+            notifyLore.add("§7You'll see collection messages");
+        }
+        notifyMeta.setLore(notifyLore);
+        notifyToggle.setItemMeta(notifyMeta);
+        gui.setItem(47, notifyToggle);
+
         player.openInventory(gui);
     }
 
@@ -414,36 +546,19 @@ public class CollectionTracker extends JavaPlugin implements Listener {
 
     private void saveCollections() {
         for (Map.Entry<UUID, Set<Material>> entry : playerCollections.entrySet()) {
-            List<String> materials = new ArrayList<>();
-            for (Material material : entry.getValue()) {
-                materials.add(material.name());
-            }
-            collectionsConfig.set(entry.getKey().toString(), materials);
+            databaseManager.savePlayerCollection(entry.getKey(), entry.getValue());
         }
-
-        try {
-            collectionsConfig.save(collectionsFile);
-        } catch (IOException e) {
-            getLogger().severe("Could not save collections!");
+        
+        // Save notification settings
+        for (UUID playerUUID : notificationsDisabled) {
+            databaseManager.saveNotificationSettings(playerUUID, true);
         }
     }
 
     private void loadCollections() {
-        for (String uuidString : collectionsConfig.getKeys(false)) {
-            UUID uuid = UUID.fromString(uuidString);
-            List<String> materialNames = collectionsConfig.getStringList(uuidString);
-            Set<Material> materials = new HashSet<>();
-
-            for (String name : materialNames) {
-                try {
-                    materials.add(Material.valueOf(name));
-                } catch (IllegalArgumentException e) {
-                    getLogger().warning("Invalid material name: " + name);
-                }
-            }
-
-            playerCollections.put(uuid, materials);
-        }
+        playerCollections = databaseManager.loadAllCollections();
+        notificationsDisabled = databaseManager.loadNotificationSettings();
+        getLogger().info("Loaded " + playerCollections.size() + " player collections from database");
     }
 
     // Leaderboard methods

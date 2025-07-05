@@ -1,0 +1,38 @@
+# CollectionTracker Configuration
+
+# Database Configuration
+database:
+  # Database type: "sqlite" or "mysql"
+  # SQLite is recommended for small-medium servers
+  # MySQL is recommended for large networks or multi-server setups
+  type: "sqlite"
+  
+  # SQLite Configuration (used when type: "sqlite")
+  # Simple file-based database - no additional setup required
+  sqlite:
+    # Database file name (will be created in plugins/CollectionTracker/)
+    filename: "collections.db"
+  
+  # MySQL Configuration (used when type: "mysql")
+  # For advanced users who want to use a MySQL database
+  mysql:
+    # Database connection settings
+    host: "localhost"
+    port: 3306
+    database: "collectiontracker"
+    username: "root"
+    password: "password"
+    
+    # Advanced settings (optional - only change if you know what you're doing)
+    # These settings are optimized for most servers and usually don't need changing
+    advanced:
+      # Maximum number of database connections in the pool
+      maximum-pool-size: 10
+      # Minimum number of idle connections to maintain
+      minimum-idle: 2
+      # How long to wait for a connection (milliseconds)
+      connection-timeout: 30000
+      # How long connections can remain idle (milliseconds)
+      idle-timeout: 600000
+      # Maximum lifetime of a connection (milliseconds)
+      max-lifetime: 1800000 
